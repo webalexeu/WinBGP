@@ -1,0 +1,61 @@
+{
+  "global": {
+    "Interval": 5,
+    "Timeout": 1,
+    "Rise": 3,
+    "Fall": 2,
+    "Metric": 100,
+    "Api": true
+  },
+  "api": [
+    {
+      "Uri": "http://127.0.0.1:8888",
+      "AuthenticationMethod": "Anonymous"
+    }
+  ],
+  "router": {
+    "BgpIdentifier": "YOUR_IP",
+    "LocalASN": "YOUR_ASN"
+  },
+  "peers": [
+    {
+      "PeerName": "Peer1",
+      "LocalIP": "YOUR_IP",
+      "PeerIP": "Peer1_IP",
+      "LocalASN": "YOUR_ASN",
+      "PeerASN": "Peer1_ASN"
+    },
+    {
+      "PeerName": "Peer2",
+      "LocalIP": "Peer2_IP",
+      "PeerIP": "10.136.21.75",
+      "LocalASN": "YOUR_ASN",
+      "PeerASN": "Peer1_ASN"
+    }
+  ],
+  "routes": [
+    {
+      "RouteName": "mywinbgpservice.contoso.com",
+      "Network": "mywinbgpservice_IP/32",
+      "Interface": "Ethernet",
+      "DynamicIpSetup": true,
+      "WithdrawOnDown": true,
+      "WithdrawOnDownCheck": "service: W32Time",
+      "NextHop": "YOUR_IP",
+      "Community": [
+        "BGP_COMMUNITY"
+      ]
+    },
+    {
+      "RouteName": "mysecondwinbgpservice.contoso.com",
+      "Network": "mysecondwinbgpservice_IP/32",
+      "Interface": "Ethernet",
+      "DynamicIpSetup": false,
+      "WithdrawOnDown": false,
+      "NextHop": "YOUR_IP",
+      "Community": [
+        "BGP_COMMUNITY"
+      ]
+    }
+  ]
+}

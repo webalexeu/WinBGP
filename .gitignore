@@ -1,0 +1,6 @@
+# Service builder executable outputs
+service/*.exe
+
+# Installer outputs
+builder/*.msi
+builder/*.wixpdb

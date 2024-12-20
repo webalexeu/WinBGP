@@ -1,0 +1,217 @@
+<?xml version="1.0"?>
+
+<?ifndef Version?>
+<?error Version must be defined?>
+<?endif?>
+<?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
+<?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+<?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif?>
+
+<!--
+  ~ Copyright 2024 The Prometheus Authors
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~ http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<Wix xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns="http://wixtoolset.org/schemas/v4/wxs"
+    >
+    <Package UpgradeCode="0889d60f-67d5-4bf5-8918-2d5e810f888d" Name="$(var.ProductName)" Version="$(var.Version)"
+             Manufacturer="Webalex System" Language="1033" Scope="perMachine">
+        <SummaryInformation Manufacturer="Webalex System" Description="$(var.ProductName) $(var.Version) installer" />
+
+        <CustomAction Id="GenerateConfig" 
+            Execute="deferred" 
+            Impersonate="no" 
+            Directory="TARGETDIR"
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;
+                        Write-Host 'Generating initial configuration file (winbgp.json)'; &#xA;
+                        $config=Get-Content -Path '[APPLICATIONFOLDER]\winbgp.json' | ConvertFrom-Json; &#xA;
+                        $localIP=(Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled -eq $true}).IPAddress[0]; &#xA;
+                        $config.router=@([PSCustomObject]@{BgpIdentifier=$localIP;LocalASN='64512'}); &#xA;
+                        $config.peers=@(); &#xA;
+                        $config.routes=@(); &#xA;
+                        $config=$config | ConvertTo-Json; &#xA;
+                        Set-Content -Value $config -Path '[APPLICATIONFOLDER]\winbgp.json' &#xA;
+                        &quot;"
+            Return="ignore"
+        />
+
+        <CustomAction Id="EnableWindowsFeature" 
+            Execute="deferred" 
+            Impersonate="no"
+            Directory="TARGETDIR"
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;if ((Get-WindowsFeature -Name 'Routing').InstallState -ne 'Installed') { Write-Host 'Adding routing feature (WinBGP prerequisite)'; Add-WindowsFeature -Name 'Routing' -IncludeAllSubFeature }&quot;"
+            Return="check"
+        />
+
+        <CustomAction Id="EnableWindowsFeatureRSAT" 
+            Execute="deferred" 
+            Impersonate="no" 
+            Directory="TARGETDIR"
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;if ((Get-WindowsFeature -Name 'RSAT-RemoteAccess-PowerShell').InstallState -ne 'Installed') { Write-Host 'Adding RSAT routing feature (WinBGP prerequisite)'; Add-WindowsFeature -Name 'RSAT-RemoteAccess-PowerShell' }&quot;"
+            Return="check"
+        />
+
+        <!-- ExeCommand="dism.exe /online /enable-feature /featurename:RasRoutingProtocols /featurename:RemoteAccessPowerShell /all" -->
+
+        <CustomAction Id="EnableRouting" 
+            Execute="deferred"
+            Impersonate="no" 
+            Directory="TARGETDIR" 
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;if ((Get-RemoteAccess).RoutingStatus -ne 'Installed') { Write-Host 'Enabling routing (WinBGP prerequisite)'; Install-RemoteAccess -VpnType RoutingOnly }&quot;"
+            Return="check"
+        />
+    
+        <CustomAction Id="RemoveConfig" 
+            Execute="deferred" 
+            Impersonate="no" 
+            Directory="TARGETDIR"
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;
+                        Write-Host 'Removing configuration file (winbgp.json)'; &#xA;
+                        Remove-Item -Path '[APPLICATIONFOLDER]\winbgp.json' &#xA;
+                        &quot;"
+            Return="ignore"
+        />
+
+        <InstallExecuteSequence>
+            <Custom Action="GenerateConfig" After="InstallFiles" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT WIX_DOWNGRADE_DETECTED" />
+            <Custom Action="EnableWindowsFeature" After="InstallFiles" Condition="&amp;Features=3 AND NOT Installed" />
+            <Custom Action="EnableWindowsFeatureRSAT" After="EnableWindowsFeature" Condition="&amp;Features=3 AND NOT Installed" />
+            <Custom Action="EnableRouting" After="EnableWindowsFeatureRSAT" Condition="&amp;Features=3 AND NOT Installed" /> <!-- TO CHECK to use Condition="MAINTENANCE" for upgrade  -->
+            <ScheduleReboot After="InstallFinalize" Condition="&amp;Features=3 AND NOT Installed" /> <!-- TO CHECK <Condition>REBOOT_REQUIRED</Condition>  -->
+            <Custom Action='RemoveConfig' Before='RemoveFiles' Condition='Installed AND (REMOVE="ALL") AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)' />
+        </InstallExecuteSequence>
+
+        <Media Id="1" Cabinet="winbgp.cab" EmbedCab="yes"  />
+        <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A later version of [ProductName] is already installed. Setup will now exit." AllowSameVersionUpgrades="yes" />
+
+
+        <Property Id="ARPHELPLINK" Value="https://github.com/webalexeu/winbgp/issues" />
+        <Property Id="ARPSIZE" Value="9000" />
+        <Property Id="ARPURLINFOABOUT" Value="https://github.com/pwebalexeu/winbgp" />
+        <!--<Property Id="ARPNOMODIFY" Value="0" />-->
+        <!--<Property Id="ARPNOREPAIR" Value="1" />-->
+        <Property Id="START_MENU_FOLDER" Value="0" />
+        <Property Id="NOSTART" Value="0" />
+
+        <Feature
+            Id="DefaultFeature"
+            Level="1"
+            Title="$(var.ProductName) $(var.Version)"
+            Description="The binary and configuration files for $(var.ProductName)"
+            Display="expand"
+            ConfigurableDirectory="APPLICATIONFOLDER"
+            AllowAdvertise="no"
+            InstallDefault="local"
+            AllowAbsent="no"
+        >
+        
+        <ComponentGroupRef Id="ApplicationFiles" />
+        <ComponentGroupRef Id="CG_FirewallException" />
+        <ComponentGroupRef Id="PATH" />
+            <!-- Subfeature to install required windows features -->
+            <Feature
+                Id="Features"
+                Level="1"
+                Title="Routing features"
+                Description="Enable required windows features for routing capabilities"
+                Display="expand"
+                AllowAdvertise="no"
+                InstallDefault="local"
+                AllowAbsent="yes">
+            </Feature>
+        </Feature>
+
+        <UI Id="FeatureTree">
+            <ui:WixUI Id="WixUI_FeatureTree" />
+            <UIRef Id="WixUI_ErrorProgressText" />
+
+
+            <!-- skip the license agreement dialog; higher Order takes priority (weird) -->
+
+            <Publish
+                Condition="NOT Installed"
+                Dialog="WelcomeDlg"
+                Control="Next"
+                Event="NewDialog"
+                Value="CustomizeDlg"
+                Order="10"/>
+            <Publish
+                Condition="NOT Installed"
+                Dialog="CustomizeDlg"
+                Control="Back"
+                Event="NewDialog"
+                Value="WelcomeDlg"
+                Order="10"/>
+
+
+            <!--CustomPropertyDlg-->
+        </UI>
+
+        <!-- InstallLocation key -->
+        <CustomAction Id="SetInstallLocation" Property="ARPINSTALLLOCATION" Value="[APPLICATIONFOLDER]" />
+
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="APPLICATIONFOLDER" Name="WinBGP">
+                <Component Id="winbgp_engine" Guid="a7b5748a-16c9-4594-85ad-de032fb3f39c">
+                    <File Id="winbgp_engine" Source="..\src\WinBGP-Engine.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                </Component>
+                <Component Id="winbgp_healthcheck" Guid="8a356315-8307-4508-b19d-00eb05e59428">
+                    <File Id="winbgp_healthcheck" Source="..\src\WinBGP-HealthCheck.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                </Component>
+                <Component Id="winbgp_api" Guid="77de0ab1-0e53-4967-9469-142f49b397a4">
+                    <File Id="winbgp_api" Source="..\src\WinBGP-API.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                </Component>
+                <Component Id="winbgp_config" Guid="03063c39-1063-4126-b974-5cad888d5804" NeverOverwrite="yes" Permanent="yes" >
+                    <File Id="winbgp_config" Name="winbgp.json" Source="..\src\winbgp.json.example" KeyPath="yes" Checksum="yes" />
+                </Component>
+                <Component Id="winbgp_config_example" Guid="b3ee9ef1-0d91-43a4-a5a4-a9074a579fb3" >
+                    <File Id="winbgp_config_example" Source="..\src\winbgp.json.example" KeyPath="yes" Checksum="yes" />
+                </Component>
+                <Component Id="winbgp_cli" Guid="b74d4be4-3de4-4006-a271-b56d078d2bcc">
+                    <File Id="winbgp_cli" Source="..\src\WinBGP.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+        <ComponentGroup Id="CG_FirewallException">
+            <Component Directory="APPLICATIONFOLDER" Id="C_FirewallException" Guid="9f522655-ac0e-42d2-a512-a7b19ebec7f7">
+                <fw:FirewallException
+                    Id="APIEndpoint"
+                    Name="$(var.ProductName) - API (TCP-In)"
+                    Description="Inbound rule for $(var.ProductName) API HTTP endpoint. [TCP]"
+                    Program="[#winbgp.exe]"
+                    Port="8888"
+                    Protocol="tcp">
+                </fw:FirewallException>
+            </Component>
+        </ComponentGroup>
+
+    <ComponentGroup Id="PATH">
+        <Component Directory="APPLICATIONFOLDER" Id="AddToPath" Guid="bd53afb3-eeb6-4eb8-979e-42a6fee3b84b" KeyPath="yes">
+            <!-- Modify system PATH variable -->
+            <Environment Id="AddToSystemPathEnv" 
+                Action="set" 
+                Name="Path" 
+                Value="[APPLICATIONFOLDER]" 
+                Permanent="no" 
+                Part="last" 
+                System="yes" 
+            />
+        </Component>
+    </ComponentGroup>
+
+    </Package>
+</Wix>
