@@ -29,8 +29,8 @@
      xmlns="http://wixtoolset.org/schemas/v4/wxs"
     >
     <Package UpgradeCode="0889d60f-67d5-4bf5-8918-2d5e810f888d" Name="$(var.ProductName)" Version="$(var.Version)"
-             Manufacturer="Webalex System" Language="1033" Scope="perMachine">
-        <SummaryInformation Manufacturer="Webalex System" Description="$(var.ProductName) $(var.Version) installer" />
+             Manufacturer="WebalexEU" Language="1033" Scope="perMachine">
+        <SummaryInformation Manufacturer="WebalexEU" Description="$(var.ProductName) $(var.Version) installer" />
 
         <CustomAction Id="GenerateConfig" 
             Execute="deferred" 
