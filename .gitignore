@@ -1,6 +1,13 @@
 # Service builder executable outputs
 service/*.exe
 
+# Signed code
+engine/*.*
+
+
 # Installer outputs
 builder/*.msi
 builder/*.wixpdb
+
+# MSI Release
+release/*.msi

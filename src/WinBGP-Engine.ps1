@@ -66,6 +66,8 @@ $scriptFullName = $argv0.fullname       # Ex: C:\Temp\PSService.ps1
 # Global settings
 $serviceName = "WinBGP"                # A one-word name used for net start commands
 $serviceDisplayName = "WinBGP"
+# To improve (Service name should be rationalized)
+$serviceInternalName = "WinBGP-Service"
 $ServiceDescription = "The BGP swiss army knife of networking on Windows"
 $pipeName = "Service_$serviceName"      # Named pipe name. Used for sending messages to the service task
 $installDir = "${ENV:ProgramW6432}\$serviceDisplayName"  # Where to install the service files
@@ -984,7 +986,7 @@ function Stop-API() {
   $ProcessID=$null
   $ApiPID=$null
   # Get service PID
-  $ProcessID=(Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" -OperationTimeoutSec 1 | Where-Object {$_.CommandLine -like "*'$installDir\$serviceDisplayName.ps1' -Service*"}).ProcessId
+  $ProcessID=(Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" -OperationTimeoutSec 1 | Where-Object {$_.CommandLine -like "*'$installDir\$serviceInternalName.ps1' -Service*"}).ProcessId
   if ($ProcessID) {
   # Get API PID
     $ApiPID=(Get-WmiObject win32_process -filter "Name='powershell.exe' AND ParentProcessId=$ProcessID").ProcessId
@@ -1115,9 +1117,10 @@ if ($Service) {                 # Run the service
       $configuration = Get-Content -Path $configdir | ConvertFrom-Json 
       Write-Log "Loading configuration file '$($configdir)'"
     } else {
-      Write-Log "Configuration file '$($configdir)' is not valid - Stopping $($serviceDisplayName) process" -Level Error
+      Write-Log "Configuration file '$($configdir)' is not valid" -Level Warning
+      Write-Log "Stopping $($serviceInternalName) process" -Level Error
       # Forcing stop process so service will know that process is not running
-      Stop-Process -Name $serviceDisplayName -Force
+      Stop-Process -Name $serviceInternalName -Force
       exit 1
     }
 
@@ -1533,7 +1536,7 @@ if ($Service) {                 # Run the service
                     }
                   }
                 } else {
-                  Write-Log "Reload aborted - Configuration file '$($configdir)' is not a valid JSON file" -Level Error
+                  Write-Log "Reload aborted - Configuration file '$($configdir)' is not a valid JSON file" -Level Warning
                 }
                 $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage"
               }
@@ -1728,6 +1731,9 @@ if ($Service) {                 # Run the service
     $msg = $_.Exception.Message
     $line = $_.InvocationInfo.ScriptLineNumber
     Write-Log -Message "Error at line ${line}: $msg" -Level Error
+    Write-Log "Stopping $($serviceInternalName) process" -Level Error
+    # Forcing stop process so service will know that process is not running (to avoid having service running without process)
+    Stop-Process -Name $serviceInternalName -Force
   } finally { # Invoked in all cases: Exception or normally by -Stop
     # Cleanup the periodic timer used in the above example
     Unregister-Event -SourceIdentifier $timerName
