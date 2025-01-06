@@ -167,13 +167,13 @@
         <StandardDirectory Id="ProgramFiles64Folder">
             <Directory Id="APPLICATIONFOLDER" Name="WinBGP">
                 <Component Id="winbgp_engine" Guid="a7b5748a-16c9-4594-85ad-de032fb3f39c">
-                    <File Id="winbgp_engine" Source="..\src\WinBGP-Engine.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                    <File Id="winbgp_engine" Source="..\engine\WinBGP-Engine.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
                 </Component>
                 <Component Id="winbgp_healthcheck" Guid="8a356315-8307-4508-b19d-00eb05e59428">
-                    <File Id="winbgp_healthcheck" Source="..\src\WinBGP-HealthCheck.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                    <File Id="winbgp_healthcheck" Source="..\engine\WinBGP-HealthCheck.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
                 </Component>
                 <Component Id="winbgp_api" Guid="77de0ab1-0e53-4967-9469-142f49b397a4">
-                    <File Id="winbgp_api" Source="..\src\WinBGP-API.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                    <File Id="winbgp_api" Source="..\engine\WinBGP-API.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
                 </Component>
                 <Component Id="winbgp_config" Guid="03063c39-1063-4126-b974-5cad888d5804" NeverOverwrite="yes" Permanent="yes" >
                     <File Id="winbgp_config" Name="winbgp.json" Source="..\src\winbgp.json.example" KeyPath="yes" Checksum="yes" />
@@ -182,7 +182,7 @@
                     <File Id="winbgp_config_example" Source="..\src\winbgp.json.example" KeyPath="yes" Checksum="yes" />
                 </Component>
                 <Component Id="winbgp_cli" Guid="b74d4be4-3de4-4006-a271-b56d078d2bcc">
-                    <File Id="winbgp_cli" Source="..\src\WinBGP.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
+                    <File Id="winbgp_cli" Source="..\engine\WinBGP.ps1" KeyPath="yes" Vital="yes" Checksum="yes" />
                 </Component>
             </Directory>
         </StandardDirectory>
