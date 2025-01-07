@@ -38,6 +38,9 @@ Invoke-Expression "wix build -arch $wixArch -o .\WinBGP-$($Version)-$($Arch).msi
 Write-Verbose "Done!"
 Pop-Location
 
+# Clean temporary build folder
+Remove-Item -Path "..\engine\*"
+
 Copy-Item -Path "WinBGP-$($Version)-$($Arch).msi" -Destination "..\release" -Force
 if ($Sign) {
     & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" sign /sha1 $CertificateThumbprint /tr http://time.certum.pl/ /td sha256 /fd sha256 /v "..\release\WinBGP-$($Version)-$($Arch).msi"

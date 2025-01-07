@@ -54,7 +54,7 @@ Param(
 )
 
 # Don't forget to increment version when updating engine
-$scriptVersion = '1.1.0'
+$scriptVersion = '1.1.1'
 
 
 # This script name, with various levels of details
@@ -67,7 +67,8 @@ $scriptFullName = $argv0.fullname       # Ex: C:\Temp\PSService.ps1
 $serviceName = "WinBGP"                # A one-word name used for net start commands
 $serviceDisplayName = "WinBGP"
 # To improve (Service name should be rationalized)
-$serviceInternalName = "WinBGP-Service"
+$serviceInternalName = "$($serviceName)-Service"
+$engineName = "$($serviceName)-Engine"
 $ServiceDescription = "The BGP swiss army knife of networking on Windows"
 $pipeName = "Service_$serviceName"      # Named pipe name. Used for sending messages to the service task
 $installDir = "${ENV:ProgramW6432}\$serviceDisplayName"  # Where to install the service files
@@ -986,12 +987,14 @@ function Stop-API() {
   $ProcessID=$null
   $ApiPID=$null
   # Get service PID
-  $ProcessID=(Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" -OperationTimeoutSec 1 | Where-Object {$_.CommandLine -like "*'$installDir\$serviceInternalName.ps1' -Service*"}).ProcessId
+  $ProcessID=(Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" -OperationTimeoutSec 1 | Where-Object {$_.CommandLine -like "*'$installDir\$engineName.ps1' -Service*"}).ProcessId
   if ($ProcessID) {
   # Get API PID
     $ApiPID=(Get-WmiObject win32_process -filter "Name='powershell.exe' AND ParentProcessId=$ProcessID").ProcessId
+    if ($ApiPID) {
+      Stop-Process -Id $ApiPID -Force -ErrorAction SilentlyContinue
+    }
   }
-  Stop-Process -Id $ApiPID -Force -ErrorAction SilentlyContinue
   Stop-Job -Name 'API' -ErrorAction SilentlyContinue
   Remove-Job -Name 'API' -Force -ErrorAction SilentlyContinue
 }
