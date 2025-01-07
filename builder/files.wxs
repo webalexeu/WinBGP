@@ -20,7 +20,7 @@
             <Component Transitive="yes">
                 <File Id="winbgp_service" Source="..\service\WinBGP-Service.exe" KeyPath="yes" Vital="yes" Checksum="yes" />
                 <ServiceInstall
-                    Id="InstallExporterService"
+                    Id="InstallWinBGPService"
                     Name="WinBGP"
                     DisplayName="WinBGP Engine"
                     Description="The BGP swiss army knife of networking on Windows"
@@ -39,10 +39,10 @@
                     <ServiceDependency Id="RemoteAccess" />
                 </ServiceInstall>
                 <ServiceControl 
-                    Id="MyServiceControl" 
+                    Id="WinBGPServiceControl" 
                     Name="WinBGP" 
+                    Stop="both"
                     Remove="both"
-                    Stop="both" 
                     Wait="yes" />
             </Component>
         </DirectoryRef>

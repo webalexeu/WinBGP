@@ -74,6 +74,14 @@
             ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;if ((Get-RemoteAccess).RoutingStatus -ne 'Installed') { Write-Host 'Enabling routing (WinBGP prerequisite)'; Install-RemoteAccess -VpnType RoutingOnly }&quot;"
             Return="check"
         />
+
+        <CustomAction Id="ServiceStart" 
+            Execute="immediate"
+            Impersonate="no" 
+            Directory="TARGETDIR" 
+            ExeCommand="powershell.exe -ExecutionPolicy Bypass -Command &quot;if ((Get-RemoteAccess).RoutingStatus -eq 'Installed') { Write-Host 'Starting WinBGP service'; Start-Service -Name WinBGP -ErrorAction SilentlyContinue }&quot;"
+            Return="ignore"
+        />
     
         <CustomAction Id="RemoveConfig" 
             Execute="deferred" 
@@ -90,8 +98,9 @@
             <Custom Action="GenerateConfig" After="InstallFiles" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT WIX_DOWNGRADE_DETECTED" />
             <Custom Action="EnableWindowsFeature" After="InstallFiles" Condition="&amp;Features=3 AND NOT Installed AND (MsiNTProductType=2 OR MsiNTProductType=3)" />
             <Custom Action="EnableWindowsFeatureRSAT" After="EnableWindowsFeature" Condition="&amp;Features=3 AND NOT Installed AND (MsiNTProductType=2 OR MsiNTProductType=3)" />
-            <Custom Action="EnableRouting" After="EnableWindowsFeatureRSAT" Condition="&amp;Features=3 AND NOT Installed AND (MsiNTProductType=2 OR MsiNTProductType=3)" /> <!-- TO CHECK to use Condition="MAINTENANCE" for upgrade  -->
-            <ScheduleReboot After="InstallFinalize" Condition="&amp;Features=3 AND NOT Installed AND (MsiNTProductType=2 OR MsiNTProductType=3)" /> <!-- TO CHECK <Condition>REBOOT_REQUIRED</Condition>  -->
+            <Custom Action="EnableRouting" After="EnableWindowsFeatureRSAT" Condition="&amp;Features=3 AND NOT Installed AND (MsiNTProductType=2 OR MsiNTProductType=3)" />
+            <Custom Action="ServiceStart" After="InstallFinalize" Condition='NOT REMOVE="ALL" AND (MsiNTProductType=2 OR MsiNTProductType=3)' />
+            <ScheduleReboot After="InstallFinalize" Condition="&amp;Features=3 AND NOT Installed AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE) AND (MsiNTProductType=2 OR MsiNTProductType=3)" /> <!-- TO CHECK <Condition>REBOOT_REQUIRED</Condition>  -->
             <Custom Action='RemoveConfig' Before='RemoveFiles' Condition='Installed AND (REMOVE="ALL") AND NOT (WIX_UPGRADE_DETECTED OR UPGRADINGPRODUCTCODE)' />
         </InstallExecuteSequence>
 
