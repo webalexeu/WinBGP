@@ -124,6 +124,15 @@ Param(
   [Parameter(ParameterSetName='RouteName', Mandatory=$false)]
   [Switch]$StopRoute,     # Control message to send to the service
 
+  [Parameter(ParameterSetName='RouteName', Mandatory=$false)]
+  [Switch]$StartHealthCheck,     # Control message to send to the service
+
+  [Parameter(ParameterSetName='RouteName', Mandatory=$false)]
+  [Switch]$StopHealthCheck,     # Control message to send to the service
+
+  [Parameter(ParameterSetName='RouteName', Mandatory=$false)]
+  [Switch]$RestartHealthCheck,     # Control message to send to the service
+
   [Parameter(ParameterSetName='BGPStatus', Mandatory=$false)]
   [Switch]$BGPStatus = $($PSCmdlet.ParameterSetName -eq 'BGPStatus'), # Get the current service status
 
@@ -144,7 +153,7 @@ Param(
 )
 
 # Don't forget to increment version when updating engine
-$scriptVersion = '1.0.1'
+$scriptVersion = '1.0.2'
 
 # This script name, with various levels of details
 # Ex: PSService
@@ -560,9 +569,12 @@ if ($RestartAPI) {
 }
 
 # Start/stop control or Maintenance control
-if ($StartRoute -or $StopRoute -or $StartMaintenance -or $StopMaintenance) {
-  # Logging
-  Write-Log "Operation for route '$RouteName' triggered by '$currentUserName'"
+if ($StartRoute -or $StopRoute -or $StartMaintenance -or $StopMaintenance -or $StartHealthCheck -or $StopHealthCheck -or $RestartHealthCheck) {
+  if ($StartRoute -or $StopRoute -or $StartMaintenance -or $StopMaintenance ) {
+    # Logging
+    Write-Log "Operation for route '$RouteName' triggered by '$currentUserName'"
+  }
+
   # Read configuration
   $configuration = Get-Content -Path $configdir | ConvertFrom-Json
   $routeCheck=$null
@@ -587,6 +599,21 @@ if ($StartRoute -or $StopRoute -or $StartMaintenance -or $StopMaintenance) {
     # STOP
     if ($StopMaintenance) {      
       $control="maintenance $RouteName stop"
+    }
+  }
+  # Start/stop control HealthCheck
+  if ($StartHealthCheck -or $StopHealthCheck -or $RestartHealthCheck) {
+    # START
+    if ($StartHealthCheck) {
+      $control="healthcheck $RouteName start"
+    }
+    # STOP
+    if ($StopHealthCheck) {
+        $control="healthcheck $RouteName stop" 
+    }
+    # RESTART
+    if ($RestartHealthCheck) {
+      $control="healthcheck $RouteName restart" 
     }
   }
   if($routeCheck) {

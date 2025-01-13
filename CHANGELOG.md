@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## Release 1.1.4 (2025-01-13)
+
+[Full Changelog](https://github.com/webalexeu/winbgp/compare/v1.1.3...v1.1.4)
+
+**Features**
+
+- Improve API graceful shutdown
+- Add control on HealtChecks jobs through CLI
+
+**Bugfixes**
+
 ## Release 1.1.3 (2025-01-07)
 
 [Full Changelog](https://github.com/webalexeu/winbgp/compare/v1.1.2...v1.1.3)

@@ -946,7 +946,7 @@ function Add-RoutePolicy() {
 #                                                                             #
 #   Function        Start-API                                                 #
 #                                                                             #
-#   Description     Starting API Engine                                       #
+#   Description     Starting API Job                                          #
 #                                                                             #
 #   Arguments       See the Param() block at the top of this script           #
 #                                                                             #
@@ -963,6 +963,7 @@ function Start-API() {
   )
   # Start API
   Write-Log "Starting API engine"
+
   # ArgumentList (,$ApiConfiguration) is to handle array as argument
   Start-Job -Name 'API' -FilePath "$installDir\$serviceDisplayName-API.ps1" -ArgumentList (,$ApiConfiguration)
 }
@@ -971,7 +972,7 @@ function Start-API() {
 #                                                                             #
 #   Function        Stop-API                                                  #
 #                                                                             #
-#   Description     Stopping API Engine                                       #
+#   Description     Stopping API Job                                          #
 #                                                                             #
 #   Arguments       See the Param() block at the top of this script           #
 #                                                                             #
@@ -983,20 +984,64 @@ function Start-API() {
 function Stop-API() {
   # Stop API
   Write-Log "Stopping API engine"
-  ### IMPROVEMENT - To be check if we can kill API properly ###
-  $ProcessID=$null
-  $ApiPID=$null
-  # Get service PID
-  $ProcessID=(Get-CimInstance Win32_Process -Filter "name = 'powershell.exe'" -OperationTimeoutSec 1 | Where-Object {$_.CommandLine -like "*'$installDir\$engineName.ps1' -Service*"}).ProcessId
-  if ($ProcessID) {
-  # Get API PID
-    $ApiPID=(Get-WmiObject win32_process -filter "Name='powershell.exe' AND ParentProcessId=$ProcessID").ProcessId
-    if ($ApiPID) {
-      Stop-Process -Id $ApiPID -Force -ErrorAction SilentlyContinue
+  # Send API stop signal (TO IMPROVE)
+  try {
+    if ((Invoke-WebRequest -Uri 'http://127.0.0.1:8888/stop' -Method Post -TimeoutSec 5).StatusCode -eq 200) {
+      Stop-Job -Name 'API' -ErrorAction SilentlyContinue
+      Remove-Job -Name 'API' -Force -ErrorAction SilentlyContinue
     }
+  } catch {
+    Write-Log "Error stopping API engine: $_" -Level Error
   }
-  Stop-Job -Name 'API' -ErrorAction SilentlyContinue
-  Remove-Job -Name 'API' -Force -ErrorAction SilentlyContinue
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Start-HealthCheck                                         #
+#                                                                             #
+#   Description     Starting HealthCheck Job                                  #
+#                                                                             #
+#   Arguments       See the Param() block at the top of this script           #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+function Start-HealthCheck() {
+  Param
+  (
+      [Parameter(Mandatory=$true)]
+      $Route
+  )
+  # Starting HealthCheck Job
+  Write-Log "Starting HealthCheck Process" -AdditionalFields @($Route.RouteName)
+  Start-Job -Name $Route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $Route
+}
+
+#-----------------------------------------------------------------------------#
+#                                                                             #
+#   Function        Stop-HealthCheck                                          #
+#                                                                             #
+#   Description     Stopping API HealthCheck                                  #
+#                                                                             #
+#   Arguments       See the Param() block at the top of this script           #
+#                                                                             #
+#   Notes                                                                     #
+#                                                                             #
+#   History                                                                   #
+#                                                                             #
+#-----------------------------------------------------------------------------#
+function Stop-HealthCheck() {
+  Param
+  (
+      [Parameter(Mandatory=$true)]
+      $Route
+  )
+  # Stopping HealthCheck Job
+  Write-Log "Stopping HealthCheck Process" -AdditionalFields @($Route.RouteName)
+  Stop-Job -Name $Route.RouteName
+  Remove-Job -Name $Route.RouteName -Force
 }
 
 #-----------------------------------------------------------------------------#
@@ -1216,8 +1261,7 @@ if ($Service) {                 # Run the service
         Write-Log "Route '$($route.RouteName)' is in maintenance mode" -AdditionalFields @($route.RouteName)
       } else {
         # Starting HealthCheck Job
-        Write-Log "Starting HealthCheck Process" -AdditionalFields @($route.RouteName)
-        Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+        Start-HealthCheck -Route $route
       }
     }
 
@@ -1307,7 +1351,6 @@ if ($Service) {                 # Run the service
                       # Start Api
                       Start-API -ApiConfiguration $configuration.api
                     } else {
-                      ### TO BE IMPROVED because killing all healthchecks jobs ###
                       # Stop Api
                       Stop-API
                     }
@@ -1340,9 +1383,7 @@ if ($Service) {                 # Run the service
                     if ($routeReloaded.SideIndicator -eq '<=') {
                       Write-Log "Route '$($routeReloaded.RouteName)' removed" -AdditionalFields @($oldRoute.RouteName)
                       # Stopping HealthCheck Job
-                      Write-Log "Stopping HealthCheck Process" -AdditionalFields @($oldRoute.RouteName)
-                      Stop-Job -Name $oldRoute.RouteName
-                      Remove-Job -Name $oldRoute.RouteName -Force
+                      Stop-HealthCheck -Route $oldRoute
                       # Remove routing policy
                       if (get-BgpRoutingPolicy -Name $oldRoute.RouteName -ErrorAction SilentlyContinue) {
                         Write-Log "Removing BGP Routing Policy [$($oldRoute.RouteName)]" -AdditionalFields @($oldRoute.RouteName)
@@ -1369,8 +1410,7 @@ if ($Service) {                 # Run the service
                       # Create routing policies
                       Add-RoutePolicy -Route $route -Peers $configuration.peers
                       # Starting HealthCheck Job
-                      Write-Log "Starting HealthCheck Process" -AdditionalFields @($route.RouteName)
-                      Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+                      Start-HealthCheck -Route $route
                     } elseif ($routeReloaded.SideIndicator -eq '==') {
                       # Comparing old route and new route to check if there are updates to perform
                       if (($route.Network -ne $oldRoute.Network) -or ($route.DynamicIpSetup -ne $oldRoute.DynamicIpSetup) -or ($route.Interface -ne $oldRoute.Interface) -or ($route.Interval -ne $oldRoute.Interval) -or (Compare-Object -ReferenceObject $oldRoute.Community -DifferenceObject $route.Community) -or ($route.Metric -ne $oldRoute.Metric) -or ($route.NextHop -ne $oldRoute.NextHop) -or ($route.WithdrawOnDown -ne $oldRoute.WithdrawOnDown) -or ($route.WithdrawOnDownCheck -ne $oldRoute.WithdrawOnDownCheck)) {
@@ -1382,10 +1422,9 @@ if ($Service) {                 # Run the service
                           # If WithdrawOnDown change, restart healthcheck
                           Write-Log "Restarting HealthCheck Process" -AdditionalFields @($route.RouteName)
                           # Stopping HealthCheck Job
-                          Stop-Job -Name $oldRoute.RouteName
-                          Remove-Job -Name $oldRoute.RouteName -Force
+                          Stop-HealthCheck -Route $route
                           # Starting HealthCheck Job
-                          Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+                          Start-HealthCheck -Route $route
                         }
                         # Manage WithdrawOnDownCheck change (Only if WithdrawOnDown was enabled and it still enabled)
                         if ($route.WithdrawOnDown -and $oldRoute.WithdrawOnDown) {
@@ -1393,22 +1432,18 @@ if ($Service) {                 # Run the service
                             Write-Log "WithdrawOnDownCheck change - Old Check: '$($oldRoute.WithdrawOnDownCheck)' - New Check: '$($route.WithdrawOnDownCheck)'"  -AdditionalFields @($Route.RouteName)
                             Write-Log "Restarting HealthCheck Process" -AdditionalFields @($route.RouteName)
                             # Stopping HealthCheck Job
-                            Stop-Job -Name $oldRoute.RouteName
-                            Remove-Job -Name $oldRoute.RouteName -Force
+                            Stop-HealthCheck -Route $oldRoute
                             # Starting HealthCheck Job
-                            Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+                            Start-HealthCheck -Route $route
                           }
                         }
                         # Manage interval change
                         if ($route.Interval -ne $oldRoute.Interval) {
                           Write-Log "Interval change - Old Interval: '$oldRouteInterval' - New Interval: '$period'"  -AdditionalFields @($Route.RouteName)
                           # Stopping HealthCheck Job
-                          Write-Log "Stopping HealthCheck Process" -AdditionalFields @($oldRoute.RouteName)
-                          Stop-Job -Name $oldRoute.RouteName
-                          Remove-Job -Name $oldRoute.RouteName -Force
+                          Stop-HealthCheck -Route $oldRoute
                           # Starting HealthCheck Job
-                          Write-Log "Starting HealthCheck Process" -AdditionalFields @($route.RouteName)
-                          Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+                          Start-HealthCheck -Route $route
                         }
                         # Manage network change
                         if ($route.Network -ne $oldRoute.Network) {
@@ -1597,9 +1632,7 @@ if ($Service) {                 # Run the service
                     # Export maintenance variable on each change (To be moved to function)
                     $maintenance | Export-CliXml -Path $FunctionCliXml -Force
                     # Stopping HealthCheck Job
-                    Write-Log "Stopping HealthCheck Process" -AdditionalFields @($route_maintenance.RouteName)
-                    Stop-Job -Name $route_maintenance.RouteName
-                    Remove-Job -Name $route_maintenance.RouteName -Force
+                    Stop-HealthCheck -Route $route_maintenance
                     # Removing route
                     if ((Get-BgpCustomRoute).Network -contains "$($route_maintenance.Network)") {
                       remove-Bgp -Route $route_maintenance
@@ -1620,8 +1653,7 @@ if ($Service) {                 # Run the service
                     # Export maintenance variable on each change (To be moved to function)
                     $maintenance | Export-CliXml -Path $FunctionCliXml -Force
                     # Starting HealthCheck Job
-                    Write-Log "Starting HealthCheck Process" -AdditionalFields @($route_maintenance.RouteName)
-                    Start-Job -Name $route_maintenance.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route_maintenance
+                    Start-HealthCheck -Route $route_maintenance
                   }
                   else {
                     Write-Log "Route '$($route_maintenance.RouteName)' was not in maintenance mode" -Level Warning
@@ -1636,6 +1668,29 @@ if ($Service) {                 # Run the service
                 Stop-API
                 # Start Api
                 Start-API -ApiConfiguration $configuration.api
+                # Start another thread waiting for control messages
+                $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage"
+              }
+              elseif ($message -like 'healthcheck*') {
+                $route_to_control=$message.split(' ')[1]
+                $control_action=$message.split(' ')[2]
+                # Grabbing route
+                $route_healthcheck=$configuration.routes | Where-Object {$_.RouteName -eq $route_to_control}
+                if ($control_action -eq 'start') {
+                  # Start HealthCheck
+                  Start-HealthCheck -Route $route_healthcheck
+                }
+                elseif ($control_action -eq 'stop') {
+                  # Stop HealthCheck
+                  Stop-HealthCheck -Route $route_healthcheck
+                } elseif ($control_action -eq 'restart') {
+                  # Log
+                  Write-Log "Restarting HealthCheck engine"
+                  # Stop HealthCheck
+                  Stop-HealthCheck -Route $route_healthcheck
+                  # Start HealthCheck
+                  Start-HealthCheck -Route $route_healthcheck
+                }
                 # Start another thread waiting for control messages
                 $pipeThread = Start-PipeHandlerThread $pipeName -Event "ControlMessage"
               }
@@ -1673,7 +1728,7 @@ if ($Service) {                 # Run the service
                 # Cleaning unhealthy HealthCheck
                 Write-Log "Restarting HealthCheck Process (Watchdog)" -AdditionalFields @($route.RouteName) -Level Warning
                 Remove-Job -Name $route.RouteName -Force -ErrorAction SilentlyContinue
-                Start-Job -Name $route.RouteName -FilePath "$installDir\WinBGP-HealthCheck.ps1" -ArgumentList $route
+                Start-HealthCheck -Route $route
               }
             }
           }
@@ -1691,9 +1746,7 @@ if ($Service) {                 # Run the service
     Write-Log -Message "Stopping HealthCheck engine"
     ForEach ($route in $configuration.routes) {
       # Stopping HealthCheck Job
-      Write-Log "Stopping HealthCheck Process" -AdditionalFields @($route.RouteName)
-      Stop-Job -Name $route.RouteName -ErrorAction SilentlyContinue
-      Remove-Job -Name $route.RouteName -Force -ErrorAction SilentlyContinue
+      Stop-HealthCheck -Route $route
     }
 
     # Stopping API
