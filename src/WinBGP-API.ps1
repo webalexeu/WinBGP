@@ -23,7 +23,7 @@ Param (
     $Configuration=$false
 )
 
-$scriptVersion = '1.1.1'
+$scriptVersion = '1.1.2'
 
 # Create detailled log for WinBGP-API
 # New-EventLog –LogName Application –Source 'WinBGP-API' -ErrorAction SilentlyContinue
@@ -316,6 +316,10 @@ if ($Configuration) {
         }
         # Starting listerner
         $listener.Start()
+
+        # Flag to control the loop
+        $keepListening = $true
+
         # Output listeners
         foreach ($ListenerPrefixe in $ListenerPrefixes) {
             [String]$Protocol = $ListenerPrefixe.Split('://')[0]
@@ -324,11 +328,12 @@ if ($Configuration) {
             Write-Log -Message "API started - Listening on '$($IP):$($Port)' (Protocol: $Protocol)"
         }
         
-        while ($listener.IsListening) {
+        while (($listener.IsListening) -and ($keepListening)) {
             # Default return
             $statusCode = [System.Net.HttpStatusCode]::OK
             $commandOutput = [string]::Empty
             $outputHeader = @{}
+            # Accept incoming request
             $context = $listener.GetContext()
             $request = $context.Request
             [string]$RequestHost=$request.RemoteEndPoint
@@ -462,8 +467,8 @@ if ($Configuration) {
                                 $peersCurrentStatus=Get-BgpPeer -ErrorAction SilentlyContinue | Select-Object PeerName,LocalIPAddress,LocalASN,PeerIPAddress,PeerASN,@{Label='ConnectivityStatus';Expression={$_.ConnectivityStatus.ToString()}}
                             }
                             catch {
-                              #If BGP Router (Local) is not configured, catch it
-                              $BgpStatus=($_).ToString()
+                                # If BGP Router (Local) is not configured, catch it
+                                $BgpStatus=($_).ToString()
                             }
                             if ($BgpStatus -eq 'BGP is not configured.') {
                                 $peersCurrentStatus=$null
@@ -497,7 +502,17 @@ if ($Configuration) {
                         }
                     }
                     'POST' {
-                        if ($FullPath -like 'api/*') {
+                        # Add stop method to stop API (TO IMRPOVE)
+                        if ($FullPath -eq 'stop') {
+                            # Only local request are authorized
+                            if ($request.IsLocal) {
+                                $keepListening = $false
+                                $statusCode = [System.Net.HttpStatusCode]::OK
+                            } else {
+                                $statusCode = [System.Net.HttpStatusCode]::Forbidden
+                            }
+                        }
+                        elseif ($FullPath -like 'api/*') {
                             $RouteName = $request.QueryString.Item("RouteName")
                             $Path=$Path.replace('api/','')
                             Write-Log "API received POST request '$Path' from '$RequestUser' - Source IP: '$RequestHost'" -AdditionalFields $RouteName
@@ -559,7 +574,10 @@ if ($Configuration) {
             $output.Write($buffer,0,$buffer.Length)
             $output.Close()
         }
-        $listener.Stop()
+        if ($listener.IsListening) {
+            $listener.Stop()
+            $listener.Close()
+        }
     } else {
         Write-Log -Message "API failed - No Uri listener available" -Level Error
     }
