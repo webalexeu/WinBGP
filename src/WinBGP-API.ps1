@@ -502,7 +502,7 @@ if ($Configuration) {
                         }
                     }
                     'POST' {
-                        # Add stop method to stop API (TO IMRPOVE)
+                        # Add stop method to stop API (TO IMPROVE)
                         if ($FullPath -eq 'stop') {
                             # Only local request are authorized
                             if ($request.IsLocal) {
