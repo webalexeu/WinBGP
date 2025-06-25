@@ -10,6 +10,9 @@ Windows Server 2016, 2019, 2022, 2025
 
 Standard MSI installation.
 
+## WinBGP Architecture
+
+![WinBGP Design](https://github.com/webalexeu/webalexeu.github.io/blob/main/winbgp/WinBGP.svg)
 
 ## Contributing
 
